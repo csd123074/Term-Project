@@ -1,0 +1,266 @@
+#include <SoftwareSerial.h>
+#include <Servo.h>
+#define NOTE_S4 262
+SoftwareSerial BTSerial(11, 12);// SoftwareSerial(RX, TX) 형식으로 블루투스 모듈과 교차하여 연결된다 .
+Servo myservo;  // 서보를 제어할 서보 오브젝트를 만든다.
+Servo myservo2;
+int speakerPin = 0;
+int trig1 = 9;
+int echo1 = 8;
+int trig2 = 20;
+int echo2 = 21;
+int LED_pins[] = {4, 5, 6, 7}; // LED 연결 핀
+int LED_GREEN = 2;
+int LED_RED = 3;
+int angle = 0;     // 서보 위치를 저장할 변수를 선언.
+int noteDuration = 150;
+boolean LED_state[4];
+float duration1;
+float distance1;
+float duration2;
+float distance2;
+
+void setup()
+{
+  myservo.attach(A0);  // 핀 9의 서보를 서보 오브젝트에 연결한다.
+  myservo2.attach(A1);
+  myservo.write(0);
+  myservo2.write(0);
+  delay(500);
+  myservo.detach();
+  myservo2.detach();
+  pinMode(trig1, OUTPUT);
+  pinMode(echo1, INPUT);
+  pinMode(trig2, OUTPUT);
+  pinMode(echo2, INPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
+  for (int i = 0; i < 4; i++) {
+    pinMode(LED_pins[i], OUTPUT); // LED 연결 핀을 출력으로 설정
+    LED_state[i] = false;     // LED 는 꺼진 상태로 시작
+    digitalWrite(LED_pins[i], LED_state[i]);
+  }
+  Serial.begin(9600);
+  BTSerial.begin(9600);
+}
+
+void loop()
+{
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_RED, HIGH);
+  WaveMt1();
+  WaveMt2();
+  if (distance2 <= 10) {
+    Myservo1(); //출입문 개폐
+  }
+  if (distance1 < 10 && distance1 >= 5 ) {
+    tone(13, NOTE_S4, 150);
+  }
+  else if (distance1 < 5 && distance1 >= 0) {
+    tone(13, NOTE_S4, 50);
+  }
+  else if (BTSerial.available()) {
+    byte android_data = BTSerial.read();
+
+    if (android_data == '5') {
+      Myservo2(); //주차 완료시 자동차 180도 회전
+    }
+    else if (android_data == '6') {
+      Serial.println(android_data);
+        Myservo1(); //출입문 개폐
+        ledTT();
+
+    }
+    else if (android_data >= '1' && android_data <= '4') {
+      int index = android_data - '0' - 1; // 배열은 0 부터 시작하므로 ‘ -1 ’이 필요
+      LED_state[index] = !LED_state[index];   // 상태 반전
+      digitalWrite(LED_pins[index], LED_state[index]);  // LED 제어
+    }
+
+  }
+}
+
+void Distance1() { //주차 감지 센서
+  digitalWrite(trig1, HIGH);
+  delay(10);
+  digitalWrite(trig1, LOW);
+  duration1 = pulseIn(echo1, HIGH);    //pulseIn함수의 단위는 ms(마이크로 세컨드)
+  distance1 = ((34000 * duration1) / 1000000) / 2;
+  Serial.print(distance1);
+  Serial.println("cm");
+  BTSerial.print(distance1);
+  BTSerial.println("cm");
+  if (distance1 < 10 && distance1 >= 3) {
+    tone(13, NOTE_S4, 150);
+  }
+  else if (distance1 < 3) {
+    tone(13, NOTE_S4);
+    delay(50);
+  }
+  delay(500);
+}
+
+
+void WaveMt2() {
+  digitalWrite(trig2, HIGH);
+  delay(10);
+  digitalWrite(trig2, LOW);
+  duration2 = pulseIn(echo2, HIGH);    //pulseIn함수의 단위는 ms(마이크로 세컨드)
+  distance2 = ((34000 * duration2) / 1000000) / 2;
+  Serial.print("주차장 출입문 데이터 : ");
+  Serial.print(distance2);
+  Serial.println("cm");
+  delay(500);
+  delay(10);
+}
+void WaveMt1() {
+  digitalWrite(trig1, HIGH);
+  delay(10);
+  digitalWrite(trig1, LOW);
+  duration1 = pulseIn(echo1, HIGH);    //pulseIn함수의 단위는 ms(마이크로 세컨드)
+  distance1 = ((34000 * duration1) / 1000000) / 2;
+  Serial.print("주차장 내부 주차 거리 데이터 : ");
+  Serial.print(distance1);
+  Serial.println("cm");
+  sendData(distance1);
+
+}
+void Led() {//주차장 내 LED 점등
+  if (BTSerial.available()) {   // 수신 데이터가 존재하는 경우
+    byte data = BTSerial.read();    // 바이트 데이터 읽기
+    if (data >= '1' && data <= '4') { // ‘ 1 ’에서 ‘ 3 ’ 사이의 숫자인 경우
+      int index = data - '0' - 1; // 배열은 0 부터 시작하므로 ‘ -1 ’이 필요
+      LED_state[index] = !LED_state[index];   // 상태 반전
+      digitalWrite(LED_pins[index], LED_state[index]);  // LED 제어
+      Serial.print(String("LED ") + (index + 1) + " is turned ");
+      if (LED_state[index])
+        Serial.println("ON !!");
+      else
+        Serial.println("OFF !!");
+    }
+  }
+}
+void ledT() {
+  for (int i = 0; i < 4; i++) {
+    pinMode(LED_pins[i], OUTPUT); // LED 연결 핀을 출력으로 설정
+    LED_state[i] = true;     // LED 는 꺼진 상태로 시작
+    digitalWrite(LED_pins[i], LED_state[i]);
+  }
+
+}
+void ledTT() {
+  for (int i = 0; i < 4; i++) {
+    pinMode(LED_pins[i], OUTPUT); // LED 연결 핀을 출력으로 설정
+    LED_state[i] = false;     // LED 는 꺼진 상태로 시작
+    digitalWrite(LED_pins[i], LED_state[i]);
+  }
+}
+
+
+void Myservo1() { //출입문 개폐
+  ledT();
+  myservo.attach(A0);
+  myservo.write(90);
+  delay(500);
+  myservo.detach();
+  digitalWrite(LED_GREEN, HIGH);
+  digitalWrite(LED_RED, LOW);
+  Serial.println("열림");
+  delay(5000);
+  myservo.attach(A0);
+  myservo.write(0);
+  delay(500);
+  myservo.detach();
+  Serial.println("닫힘");
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_RED, HIGH);
+
+}
+void Myservo2() { //주차 완료시 자동차 180도 회전
+  if (myservo2.read() > 45) {
+    myservo2.attach(A1);
+    myservo2.write(170);
+    delay(500);
+    myservo2.write(160);
+    delay(500);
+    myservo2.write(150);
+    delay(500);
+    myservo2.write(140);
+    delay(500);
+    myservo2.write(130);
+    delay(500);
+    myservo2.write(120);
+    delay(500);
+    myservo2.write(110);
+    delay(500);
+    myservo2.write(100);
+    delay(500);
+    myservo2.write(90);
+    delay(500);
+    myservo2.write(80);
+    delay(500);
+    myservo2.write(70);
+    delay(500);
+    myservo2.write(60);
+    delay(500);
+    myservo2.write(50);
+    delay(500);
+    myservo2.write(40);
+    delay(500);
+    myservo2.write(30);
+    delay(500);
+    myservo2.write(20);
+    delay(500);
+    myservo2.write(10);
+    delay(500);
+    myservo2.write(0);
+    delay(500);
+    myservo2.detach();
+  }
+  else if (myservo2.read() < 45) {
+    myservo2.attach(A1);
+    myservo2.write(10);
+    delay(500);
+    myservo2.write(20);
+    delay(500);
+    myservo2.write(30);
+    delay(500);
+    myservo2.write(40);
+    delay(500);
+    myservo2.write(50);
+    delay(500);
+    myservo2.write(60);
+    delay(500);
+    myservo2.write(70);
+    delay(500);
+    myservo2.write(80);
+    delay(500);
+    myservo2.write(90);
+    delay(500);
+    myservo2.write(100);
+    delay(500);
+    myservo2.write(110);
+    delay(500);
+    myservo2.write(120);
+    delay(500);
+    myservo2.write(130);
+    delay(500);
+    myservo2.write(140);
+    delay(500);
+    myservo2.write(150);
+    delay(500);
+    myservo2.write(160);
+    delay(500);
+    myservo2.write(170);
+    delay(500);
+    myservo2.write(180);
+    delay(500);
+    myservo2.detach();
+  }
+}
+
+void sendData(double val) {
+  String message = String(val) + '\n';
+  BTSerial.print(message);
+}
+
